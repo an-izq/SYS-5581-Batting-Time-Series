@@ -1,0 +1,28 @@
+---
+title: 'Andres Izquierdo Data wrangling Extract, transform, and load your data'
+author: "Andres Izquierdo"
+date: "2/13/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Bringing in Data
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tsibble)
+load("~/UVA SYS ME/SYS 5581 Time Series/Lahman-master/data/Batting.RData")
+Batting
+Batting.clean <- na.omit(Batting) 
+is_duplicated(Batting.clean, key = playerID, index = yearID)
+Batting.merge <- group_by(Batting.clean, playerID, yearID) %>% mutate(G = sum(G), AB = sum(AB), R = sum(R), H = sum(H), X2B = sum(X2B), X3B = sum(X3B), HR = sum(HR), RBI = sum(RBI), SB = sum(SB), CS = sum(CS), BB = sum(BB), SO = sum(SO), IBB = sum(IBB), HBP = mean(HBP), HBP = mean(HBP), SH = sum(SH), SF = sum(SF), GIDP = sum(GIDP)) # Combining stats for players that were on different teams during the same year.
+Batting.merge <- Batting.merge [!duplicated(Batting.merge[c(1,2)]),] # Getting rid of duplicates
+Batting_tsbl <- as_tsibble(Batting.merge, key = playerID, index = yearID)
+Batting_tsbl
+Batting.num <- Batting.merge[,c(6:22)]
+boxplot(Batting.num)
+```
+
