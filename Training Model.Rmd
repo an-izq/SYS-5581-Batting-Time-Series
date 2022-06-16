@@ -1,0 +1,285 @@
+---
+title: "Model Training"
+author: "Andres Izquierdo"
+date: "3/23/2022"
+output: pdf_document
+subtitle: SYS 5581 Time-Series & Forecasting
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages,  warning=FALSE}
+# Data cleaning and set up.
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tsibble)
+library(stats)
+library(fpp3)
+library(fable)
+library(forecast)
+```
+
+```{r load and wrangle data}
+#Locating file
+path <- here::here("Lahman-master", "data", "Batting.RData") 
+
+load(path)
+
+# Setting starting year as 1920 beginning of the live-ball era.
+Start_Year = 1953
+
+# removing missing statistics
+#Batting.clean <- na.omit(Batting)
+
+Batting$stint <- 1
+names(Batting)[3] <- 'Season'
+
+first_year <- Batting %>% 
+              group_by(playerID) %>% 
+              summarize(firstyear = as.numeric(min(yearID)))
+
+Batting <- Batting %>% left_join(first_year, by="playerID") 
+
+Batting <- Batting %>% mutate(Season = yearID - firstyear + 1)
+
+Batting <- Batting %>% filter(firstyear >= Start_Year)
+
+Batting <- Batting[,-23]
+
+#fill any timestep not entry create new row fill na then filter out player in which there is an NA.
+
+# USE filter if any are NA.
+
+# Has gaps functions group by player filter has gaps is false.
+
+
+# Combining stats for players that were on different teams during the same year.
+Batting.merge <- group_by(Batting, playerID, yearID) %>% 
+  mutate(G = sum(G),
+         AB = sum(AB),
+         R = sum(R),
+         H = sum(H),
+         X2B = sum(X2B),
+         X3B = sum(X3B), 
+         HR = sum(HR), 
+         RBI = sum(RBI), 
+         SB = sum(SB), 
+         CS = sum(CS), 
+         BB = sum(BB), 
+         SO = sum(SO), 
+         IBB = sum(IBB), 
+         HBP = mean(HBP), 
+         SH = sum(SH), 
+         SF = sum(SF), 
+         GIDP = sum(GIDP))  %>% 
+  ungroup()
+
+# Getting Rid of IBB Column as we do not need it for analysis.
+Batting.merge <- subset(Batting.merge, select = -c(IBB))
+
+# Setting UP Batting Average Statistic
+Batting.merge <- Batting.merge %>% mutate(Bavg = H/AB) 
+
+# Replacing NaN for all the times a batter got 0 hits and 0 at bats, can't divide 0/0, so replacing with 0. 
+Batting.merge[is.na(Batting.merge)] = 0 
+
+# Setting UP Slugging Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(SLG = (H+X2B*2+X3B*3+HR*4)/AB)
+
+# Setting UP On Base Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(OBP = (H+BB+HBP)/(AB+BB+HBP+SF))
+
+# Setting UP Slugging Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(OPS = (OBP+SLG)) 
+
+# removing missing statistics after OPS, SLG, and OPS calculations
+Batting.merge <- na.omit(Batting.merge) 
+
+# Getting rid of duplicates
+Batting.merge <- Batting.merge [!duplicated(Batting.merge[c(1,2)]),] 
+ 
+Batting.merge %>% 
+  mutate(Season = lubridate::as_date(Season)) %>%
+  mutate(playerID = as.factor(playerID)) %>%
+  mutate(Season   = as_date(Season)) %>%
+  as_tsibble(key = playerID, index = Season)
+Batting_tsbl <- as_tsibble(Batting.merge, key = playerID, index = Season)
+Batting_tsbl
+Batting_tsbl_gaps <- has_gaps(Batting_tsbl)
+Batting_tsbl <- Batting_tsbl %>% left_join(Batting_tsbl_gaps, by="playerID")
+Batting_tsbl <- Batting_tsbl[Batting_tsbl$.gaps != "TRUE",]
+Batting_tsbl <- Batting_tsbl[,-26]
+```
+
+# AR(1) Modeling with six different players.
+
+## Hank Aaron Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "aaronha01") -> aaronha01_tsbl
+
+aaronha01_tsbl %>% autoplot(OPS)
+
+aaronha01_ar <- arima(aaronha01_tsbl$OPS , order = c(1, 0, 0))
+aaronha01_ar
+acf(aaronha01_ar$residuals)
+
+aaronha01_tsbl_test <- aaronha01_tsbl %>%
+  filter(aaronha01_tsbl$yearID >= 1971)
+
+aaronha01_tsbl_train <- aaronha01_tsbl %>%
+  filter(aaronha01_tsbl$yearID < 1971)
+
+aaronha01_ar <- arima(aaronha01_tsbl_train$OPS , order = c(1, 0, 0))
+
+aaronha01_fc_ar <- forecast(aaronha01_ar, h = 6)
+
+aaronha01_fc_ar_mean <- aaronha01_fc_ar$mean[1:6]
+
+plot(aaronha01_fc_ar)
+
+accuracy(aaronha01_fc_ar_mean, aaronha01_tsbl_test$OPS)
+```
+
+## Ichiro Suzuki Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "suzukic01") -> suzukic01_tsbl
+
+suzukic01_tsbl %>% autoplot(OPS)
+
+suzukic01_ar <- arima(suzukic01_tsbl$OPS , order = c(1, 0, 0))
+suzukic01_ar
+acf(suzukic01_ar$residuals)
+
+suzukic01_tsbl_test <- suzukic01_tsbl %>%
+  filter(suzukic01_tsbl$yearID >= 2016)
+
+suzukic01_tsbl_train <- suzukic01_tsbl %>%
+  filter(suzukic01_tsbl$yearID < 2016)
+
+suzukic01_ar <- arima(suzukic01_tsbl_train$OPS , order = c(1, 0, 0))
+
+suzukic01_fc_ar <- forecast(suzukic01_ar, h = 4)
+
+suzukic01_fc_ar_mean <- suzukic01_fc_ar$mean[1:4]
+
+plot(suzukic01_fc_ar)
+
+accuracy(suzukic01_fc_ar_mean, suzukic01_tsbl_test$OPS)
+```
+
+## Derek Jeter Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "jeterde01") -> jeterde01_tsbl
+
+jeterde01_tsbl %>% autoplot(OPS)
+
+jeterde01_ar <- arima(jeterde01_tsbl$OPS , order = c(1, 0, 0))
+jeterde01_ar
+acf(jeterde01_ar$residuals)
+
+jeterde01_tsbl_test <- jeterde01_tsbl %>%
+  filter(jeterde01_tsbl$yearID >= 2011)
+
+jeterde01_tsbl_train <- jeterde01_tsbl %>%
+  filter(jeterde01_tsbl$yearID < 2011)
+
+jeterde01_ar <- arima(jeterde01_tsbl_train$OPS , order = c(1, 0, 0))
+
+jeterde01_fc_ar <- forecast(jeterde01_ar, h = 4)
+
+jeterde01_fc_ar_mean <- jeterde01_fc_ar$mean[1:4]
+
+plot(jeterde01_fc_ar)
+
+accuracy(jeterde01_fc_ar_mean, jeterde01_tsbl_test$OPS)
+```
+
+## David Ortiz Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "ortizda01") -> ortizda01_tsbl
+
+ortizda01_tsbl %>% autoplot(OPS)
+
+ortizda01_ar <- arima(ortizda01_tsbl$OPS , order = c(1, 0, 0))
+ortizda01_ar
+acf(ortizda01_ar$residuals)
+
+ortizda01_tsbl_test <- ortizda01_tsbl %>%
+  filter(ortizda01_tsbl$yearID >= 2013)
+
+ortizda01_tsbl_train <- ortizda01_tsbl %>%
+  filter(ortizda01_tsbl$yearID < 2013)
+
+ortizda01_ar <- arima(ortizda01_tsbl_train$OPS , order = c(1, 0, 0))
+
+ortizda01_fc_ar <- forecast(ortizda01_ar, h = 4)
+
+ortizda01_fc_ar_mean <- ortizda01_fc_ar$mean[1:4]
+
+plot(ortizda01_fc_ar)
+
+accuracy(ortizda01_fc_ar_mean, ortizda01_tsbl_test$OPS)
+```
+
+## Pete Rose Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "rosepe01") -> rosepe01_tsbl
+
+rosepe01_tsbl %>% autoplot(OPS)
+
+rosepe01_ar <- arima(rosepe01_tsbl$OPS , order = c(1, 0, 0))
+rosepe01_ar
+acf(rosepe01_ar$residuals)
+
+rosepe01_tsbl_test <- rosepe01_tsbl %>%
+  filter(rosepe01_tsbl$yearID >= 1982)
+
+rosepe01_tsbl_train <- rosepe01_tsbl %>%
+  filter(rosepe01_tsbl$yearID < 1982)
+
+rosepe01_ar <- arima(rosepe01_tsbl_train$OPS , order = c(1, 0, 0))
+
+rosepe01_fc_ar <- forecast(rosepe01_ar, h = 5)
+
+rosepe01_fc_ar_mean <- rosepe01_fc_ar$mean[1:5]
+
+plot(rosepe01_fc_ar)
+
+accuracy(rosepe01_fc_ar_mean, rosepe01_tsbl_test$OPS)
+```
+
+## Barry Bonds Ar(1) set up and predictions.
+```{r}
+Batting_tsbl %>%
+  filter(playerID == "bondsba01") -> bondsba01_tsbl
+
+bondsba01_tsbl %>% autoplot(OPS)
+
+bondsba01_ar <- arima(bondsba01_tsbl$OPS , order = c(1, 0, 0))
+bondsba01_ar
+acf(bondsba01_ar$residuals)
+
+bondsba01_tsbl_test <- bondsba01_tsbl %>%
+  filter(bondsba01_tsbl$yearID >= 2004)
+
+bondsba01_tsbl_train <- bondsba01_tsbl %>%
+  filter(bondsba01_tsbl$yearID < 2004)
+
+bondsba01_ar <- arima(bondsba01_tsbl_train$OPS , order = c(1, 0, 0))
+
+bondsba01_fc_ar <- forecast(bondsba01_ar, h = 4)
+
+bondsba01_fc_ar_mean <- bondsba01_fc_ar$mean[1:4]
+
+plot(bondsba01_fc_ar)
+
+accuracy(bondsba01_fc_ar_mean, bondsba01_tsbl_test$OPS)
+```
