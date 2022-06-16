@@ -1,0 +1,125 @@
+---
+title: "Exploratory data analysis"
+author: "Andres Izquierdo"
+date: "2/16/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Data cleaning and set up.
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(tsibble)
+library(stats)
+
+path <- here::here("Lahman-master", "data", "Batting.RData")
+
+load(path)
+
+Start_Year = 1955
+
+# removing missing statistics
+Batting.clean <- na.omit(Batting)
+
+# Combining stats for players that were on different teams during the same year.
+Batting.merge <- group_by(Batting.clean, playerID, yearID) %>% mutate(G = sum(G), AB = sum(AB), R = sum(R), H = sum(H), X2B = sum(X2B), X3B = sum(X3B), HR = sum(HR), RBI = sum(RBI), SB = sum(SB), CS = sum(CS), BB = sum(BB), SO = sum(SO), IBB = sum(IBB), HBP = mean(HBP), HBP = mean(HBP), SH = sum(SH), SF = sum(SF), GIDP = sum(GIDP))  %>% 
+  ungroup()
+
+# Setting UP Batting Average Statistic
+Batting.merge <- Batting.merge %>% mutate(Bavg = H/AB) 
+
+# Replacing NaN for all the times a batter got 0 hits and 0 at bats, can't divide 0/0, so replacing with 0. 
+Batting.merge[is.na(Batting.merge)] = 0 
+
+# Setting UP Slugging Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(SLG = (H+X2B*2+X3B*3+HR*4)/AB)
+
+# Setting UP On Base Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(OBP = (H+BB+HBP)/(AB+BB+HBP+SF))
+
+# Setting UP Slugging Percentage Statistic
+Batting.merge <- Batting.merge %>% mutate(OPS = (OBP+SLG)) 
+
+# removing missing statistics after OPS, SLG, and OPS calculations
+Batting.merge <- na.omit(Batting.merge) 
+
+# Getting rid of duplicates
+Batting.merge <- Batting.merge [!duplicated(Batting.merge[c(1,2)]),] 
+
+# keeping statistics from 1955 on as that is when all statistics started to be tracked. 
+Batting.merge <- Batting.merge %>% filter(yearID >= Start_Year) 
+Batting.merge %>% 
+  mutate(yearID = lubridate::as_date(yearID)) %>%
+  mutate(playerID = as.factor(playerID)) %>%
+  mutate(yearID   = as_date(yearID)) %>%
+  as_tsibble(key = playerID, index = yearID)
+Batting_tsbl <- as_tsibble(Batting.merge, key = playerID, index = yearID)
+Batting_tsbl
+```
+
+```{r}
+Batting.num <- Batting.merge[,c(6:23)]
+summary(Batting.num)
+boxplot(Batting.num)
+hist(Batting.num$H)
+```
+
+```{r plot total hits by year}
+Batting.merge %>%
+  filter(yearID <= 2019) %>%
+  group_by(yearID) %>%
+  summarise(H = sum(H)) %>%
+  ggplot(aes(x=yearID,y=H)) +
+    geom_line() + xlab("Year") + ylab("MLB total hits by year")
+```
+
+Looking at the number of hits over the years there does not seem to appear any seasonality really. The biggest things that stand out from the Hits graph is the 1981 year is significantly lower than the rest due to a players' strike that happened halfway through the season and same with the 1994 season which ended the season that year. Another one that stands out is the 2020 season which consisted of a 60 game season due an abbreviated season due to the Covid-19 pandemic. 
+
+```{r batting avg}
+#ggplot(data=Batting.merge, aes(x=yearID,y=Bavg)) + geom_line() + xlab("Year") + ylab("Batting Average throughout the years in MLB")
+```
+
+
+```{r plot total home runs}
+Batting.merge %>%
+  filter(yearID <= 2019) %>%
+  group_by(yearID) %>%
+  summarise(HR = sum(HR)) %>%
+  ggplot(aes(x=yearID,y=HR)) +
+    geom_line() + xlab("Year") + ylab("MLB total home runs by year")
+```
+
+When we look at the HR graph we can't really see a trend or anything, we can tell that the peak of the graph near the late 90s and early 2000s is influenced by the peak of the steroids era in which the league did not implement PED testing until 2003 which we can see by the huge drop in HR for the season that year compared to the previous two. 
+
+```{r plot total league strike outs}
+Batting.merge %>%
+  filter(yearID <= 2019) %>%
+  group_by(yearID) %>%
+  summarise(SO = sum(SO)) %>%
+  ggplot(aes(x=yearID,y=SO)) +
+    geom_line() + xlab("Year") + ylab("MLB total strike-outs by year")
+```
+
+Now when we look at the strike out graph we do see an upward trend in the number of strikeouts throughout the years, we can see the peak coming in in the late 2000s and staying up in the area throughout the 2010s. 
+
+```{r plot average league OPS}
+Batting.merge %>%
+  filter(yearID <= 2019) %>%
+  group_by(yearID) %>%
+  summarise(OPS = mean(OPS)) %>%
+  ggplot(aes(x=yearID,y=OPS)) +
+    geom_line() + xlab("Year") + ylab("MLB Average OPS by year")
+```
+
+Now when we look at the average OPS graph we don't really see a trend, we can see a peak in the late 90s and early 2000s and a sudden drop off that seem to match the sudden rise of strikeouts in the previous graph.
+
+```{r}
+acf(Batting_tsbl$OPS,  type = c("correlation"))
+acf(Batting_tsbl$Bavg, type = c("correlation"))
+```
+Acf plots show Auto correlation after 12 time steps.

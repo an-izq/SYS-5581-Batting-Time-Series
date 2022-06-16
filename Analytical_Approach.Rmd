@@ -1,0 +1,22 @@
+---
+title: "Analytical Approach"
+author: "Andres Izquierdo"
+subtitle: "SYS 5581 Time-Series & Forecasting"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Selected Analytic Approach
+
+This project will be looking at yearly time intervals analyzing the performance of batters in order to forecast two vaules: Batting average and On-base-plus slugging.
+
+Analyzing these two variables during yearly time intervals will be done by using lagged regression, AR(p) and ARMA(p,1).
+
+Since this project is looking at hundreds of MLB players none with the exact same career length and performance the model will have to adapt to each player in order to determine the p in the AR and ARMA models to use their statistics from previous years to forecast the performance of future years. This will be done by using recent (past year) data and past (entire career previous to the most recent year) data, as training data, to make forecasts on the next couple of seasons, test data, and compare performances with the test data.
+
+# Analytic Approach Justification
+
+I am using recent and past performance periods as batters tend to go on streaks in their careers that are unexpected. One year a batter may be the league MVP (Most Valuable Play) while the next year their performance drops significantly. Keeping a series of isolated data from the model I will then be able to use that series as test data to compare results.

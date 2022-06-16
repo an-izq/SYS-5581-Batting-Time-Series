@@ -1,0 +1,16 @@
+---
+title: "Andres Izquierdo SYS 5581 Concept Note"
+author: "Andres Izquierdo"
+date: "2/1/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Andres Izquierdo Concept Note: Lahman's Baseball Database
+
+This project will be exploring Major League Baseball (MLB) data using Lahman's Baseball Database which contains complete batting and pitching statistics from 1871 to 2020, plus fielding statistics, standings, team stats, managerial records, post-season data, and more. The motivation behind this project besides being a big baseball fan is using Time Series analysis to look at players yearly batting statistics to forecast future performance and be able to determine when players will reach peak performance and when they will have off years.Baseball is known as a numbers game, with analytics influencing every decision in the league, the most famous example being Michael Lewis' book "Moneyball: The Art of Winning an Unfair Game" which was adapted into a movie.
+
+This project will have multiple models that take into account players age, years in the league, along with other statistics. The Final model will be used to forecast the future seasons of promising young talent currently in the league using the data currently in hand.
